@@ -12,9 +12,15 @@
 #include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#include <bits/stdc++.h>
 #include "LLVMFloatToFixedPass.h"
 #include "TypeUtils.h"
+#include <iostream>
+#include <fstream>
+#include <sstream>
 
+using namespace std;
 using namespace llvm;
 using namespace flttofix;
 using namespace taffo;
@@ -28,6 +34,9 @@ void FloatToFixed::performConversion(
   Module& m,
   std::vector<Value*>& q)
 {
+
+  ofstream conversionFile;
+  conversionFile.open ("conversion");
   
   for (auto i = q.begin(); i != q.end();) {
     Value *v = *i;
@@ -59,6 +68,62 @@ void FloatToFixed::performConversion(
         Instruction *newinst = dyn_cast<Instruction>(newv);
         Instruction *oldinst = dyn_cast<Instruction>(v);
         newinst->setDebugLoc(oldinst->getDebugLoc());
+        
+        std::string str;
+        std::string type_str;
+        llvm::raw_string_ostream rso(type_str);
+        (valueInfo(v)->origType)->print(rso);
+        
+        const DebugLoc &location = newinst->getDebugLoc();
+
+        /*std::string operators = " Operators: ";
+
+        for (auto op = newinst->op_begin(); op != newinst->op_end(); op++) {
+          Value* v = op->get();
+          StringRef name = v->getName();
+
+          stringstream ss(name.data());
+          operators = operators + ss.str() + " ";
+        }*/
+
+        std::string functionStr = "";
+
+        if(CallInst *callInstruction = dyn_cast<CallInst>(v)) {
+          const TargetLibraryInfo *TLI; 
+          LibFunc inbuilt_func;
+          std::set<StringRef> builtins;
+
+          /* Gather all built-in functions 
+            --------------------- */
+          for (auto &F : m)
+          {
+            if (TLI->getLibFunc(F, inbuilt_func))
+                builtins.insert(F.getFunction().getName());
+          }       
+          // Cast into Function pointer
+          Function *called_func = callInstruction->getCalledFunction();
+          StringRef func_name = called_func->getName();
+          // This line checks to see if the function is not a builtin-function
+          if (builtins.count(func_name)==0)
+          {
+            functionStr = "NOT-BUILT-IN";
+          }
+          else {
+            functionStr = "BUILT-IN";
+
+          }       
+        }
+
+
+        /*conversionFile << "New type: -" + (valueInfo(v)->fixpType).toString() + "-Old type: -" + rso.str()
+        
+        + "-LINE: -" + to_string(location.getLine()) + "-COLUMN: -" + to_string(location.getCol())  + "-OPCODE: -" + oldinst->getOpcodeName() + "-" + operators + "-" + functionStr<< endl; */
+        if(location) {
+          conversionFile << to_string(location.getLine()) + " " + to_string(location.getCol())  + " " + oldinst->getOpcodeName() + " " + functionStr<< endl;
+        }
+        else {
+          printf("location is NULL\n");
+        }
       }
       cpMetaData(newv,v);
       if (newv != v) {
@@ -73,6 +138,8 @@ void FloatToFixed::performConversion(
     }
     i++;
   }
+
+  conversionFile.close();
 }
 
 
